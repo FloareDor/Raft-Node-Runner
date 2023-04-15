@@ -6,6 +6,7 @@ import requests
 from flask import Flask, request, jsonify
 import sys
 import multiprocessing
+import aiohttp
 
 app = Flask(__name__)
 app.app_context().push()
@@ -51,12 +52,13 @@ class RaftNode:
 
 
 	async def follower(self):
-		self.reset_timeout()
+		#self.reset_timeout()
+		self.timeout = 7
 		await asyncio.sleep(self.timeout)
 		print(self.timeout, file=sys.stdout)
 		while True:
 			if self.timeout <= 0:
-				print(f"{self.node_id}: timed out as follower", file=sys.stdout)
+				print(f"{self.node_id}: timed out as follower, the leader got killed", file=sys.stdout)
 				self.state = "candidate"
 				return
 			await asyncio.sleep(1)
@@ -64,19 +66,19 @@ class RaftNode:
 
 	async def candidate(self):
 		try:
-			self.current_term += 1
+			
 			self.voted_for = self.node_id
 			self.reset_timeout()
 			self.votesReceived = 1
 			vote_tasks = []
 			for node_id in self.nodes:
 				if node_id != self.node_id:
-					votes = self.request_vote(node_id)
+					votes = await self.request_vote(node_id)
 					vote_tasks.append(votes)
 			while self.state == "candidate":
 				if self.timeout <= 0:
 					self.reset_timeout()
-					self.current_term += 1
+					#self.current_term += 1
 					self.votesReceived = 1
 					vote_tasks = []
 					for node_id in self.nodes:
@@ -86,11 +88,11 @@ class RaftNode:
 				await asyncio.sleep(4)
 				for vote_task in vote_tasks:
 					try:
-						response_data = await vote_task
+						response_data = vote_task
 						response_data = response_data.data
-						print(response_data["voteGranted"], file=sys.stderr)
-						print(response_data["voteGranted"], file=sys.stderr)
-						print(response_data["voteGranted"], file=sys.stderr)
+						print(response_data, file=sys.stderr)
+						# print(response_data, file=sys.stderr)
+						# print(response_data, file=sys.stderr)
 						if response_data[1]:
 							self.votesReceived += 1
 							if self.votesReceived > len(self.nodes) // 2:
@@ -108,12 +110,13 @@ class RaftNode:
 			print(e, file=sys.stdout)
 
 	async def leader(self):
+		self.current_term += 1
 		print("SLEEEEEEEEEEEEEEPINGGGGGGGG", file=sys.stderr)
-		await asyncio.sleep(10)
+		#await asyncio.sleep(10)
 		self.reset_timeout()
 		while True:
 			await asyncio.sleep(3)
-			self.send_heartbeats()
+			await self.send_heartbeats()
 				
 
 	def reset_timeout(self):
@@ -134,7 +137,7 @@ class RaftNode:
 	# 		"leaderCommit": self.last_applied
 	# 	}
 	#@app.route("/requestVote", methods = ["GET", "POST"])
-	async def request_vote(self, node_id="node1"):
+	async def request_vote(self, node_id):
 		try:
 			"""
 			Send a RequestVote RPC to the specified node to request its vote for becoming leader
@@ -148,7 +151,7 @@ class RaftNode:
 			try:
 				#node_id = "node2"
 				url = f"http://{self.nodes[node_id]['ip']}:{self.nodes[node_id]['port']}/requestVote"
-				print("url", file=sys.stdout)
+				print("url", file=sys.stderr)
 				last_index = len(self.log) - 1
 				last_term = self.log[last_index]['term'] if self.log else 0
 
@@ -158,68 +161,78 @@ class RaftNode:
 					'last_LogIndex': last_index,
 					'last_Log_Term': last_term,
 				}
-
-				response = requests.post(url, json=post_data) 
-				print(data, file=sys.stdout)
+				print("requested_vote", file=sys.stderr)
+				# response = ""
+				# async with aiohttp.ClientSession() as session:
+				# 	async with session.post(url, data=post_data) as response:
+				response = requests.post(url, json=post_data)
+				print(response.text, file=sys.stderr)
 
 				# async with aiohttp.ClientSession() as session:
 				# 	async with session.post(url, json=data) as response:
-				# 		if response.status == 200:
-				# 			response_data = await response.json()
-				# 			if response_data['voteGranted']:
-				# 				self.votesReceived += 1
-				# 			if response_data['term'] > self.current_term:
-				# 				self.current_term = response_data['term']
-				# 				self.state = "follower"
+				if response.status_code == 200:
+					response_data = response.json()
+					if response_data['voteGranted']:
+						self.votesReceived += 1
+					if response_data['term'] > self.current_term:
+						self.votesReceived -= 1
+						self.current_term = response_data['term']
+						self.state = "follower"
+						
 			except Exception as e:
-				print(e, file=sys.stdout)
+				print(f"REQUEST VOTE {e}", file=sys.stdout)
 		except Exception as e:
-			print(e, file=sys.stderr)
+			print(f"REQUEST VOTE 2 {e}", file=sys.stdout)
 		return jsonify(data)
 
 	#@app.route("/appendEntries", methods = ["GET", "POST"])
+	
+
 	async def send_heartbeats(self): 
-		data = {
+		try:
+			data = {
 				"term": self.current_term,
 				"success": True
-			   }
+			}
 
-		print(f"Received Heartbeat: {data}", file=sys.stdout)
-		"""
-		Send heartbeats to all nodes in the nodes to maintain leadership
-		"""
-		for node_id in self.nodes:
-			if node_id != self.node_id:  # Skip sending a heartbeat to self
-				url = f"http://{self.nodes[node_id]['ip']}:{self.nodes[node_id]['port']}/appendEntries"
-				last_index = len(self.log) - 1
-				last_term = self.log[last_index]['term'] if self.log else 0
-				# data = {
-				# 	'term': self.current_term,
-				# 	'leader_id': self.node_id,
-				# }
-				post_data = {
-					"term": self.current_term,
-					"leaderId": self.leader_id,
-					"prevLogIndex": last_index,
-					"prevLogTerm": last_term,
-					"entries": [{
-						"term": self.current_term,
-						"command": "command"
-					}],
-					"leaderCommit": self.last_applied
-				}
-				response = requests.post(url, json=data)
-				print(f"Sent Heartbeat: {data}", file=sys.stdout)
+			"""
+			Send heartbeats to all nodes in the nodes to maintain leadership
+			"""
+			async with aiohttp.ClientSession() as session:
+				for node_id in self.nodes:
+					if node_id != self.node_id:  # Skip sending a heartbeat to self
+						url = f"http://{self.nodes[node_id]['ip']}:{self.nodes[node_id]['port']}/appendEntries"
+						last_index = len(self.log) - 1
+						last_term = self.log[last_index]['term'] if self.log else 0
 
-				# Update the follower's term if it's behind
-				if response.status_code == 200:
-					response_data = response.json()
-					if response_data['term'] > self.current_term:
-						self.current_term = response_data['term']
-						self.state = 'follower'
-		
+						post_data = {
+							"term": self.current_term,
+							"leaderId": self.leader_id,
+							"prevLogIndex": last_index,
+							"prevLogTerm": last_term,
+							"entries": [{
+								"term": self.current_term,
+								"command": "command"
+							}],
+							"leaderCommit": self.last_applied
+						}
+
+						async with session.post(url, json=post_data) as response:
+							print(f"Sent Heartbeat: {data}", file=sys.stderr)
+
+							# Update the follower's term if it's behind
+							if response.status == 200:
+								response_data = await response.json()
+								#print(f"Received Heartbeat {response_data}")
+								if response_data['term'] > self.current_term:
+									self.current_term = response_data['term']
+									self.state = 'follower'
+		except Exception as e:
+			print(1111111111111111111111112222222222222222222222222222222)
+			print(f"HEART HEART: {e}", file=sys.stderr)
+
 		return data
-			
+
 
 async def main():
 	# Define the nodes
@@ -244,5 +257,5 @@ async def main():
 
 
 if __name__ == '__main__':
-    asyncio.run(main())
-    
+	asyncio.run(main())
+	
