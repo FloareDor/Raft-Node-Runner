@@ -1,8 +1,7 @@
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from node import RaftNode
 import asyncio
 import sys
-import jsonify
 import threading
 
 api = Flask(__name__)
@@ -23,6 +22,7 @@ nodes = {
 node_id = "node1"
 #api.run(nodes[node_id]["ip"], port=nodes[node_id]["port"])
 raft_node = RaftNode(node_id, nodes)
+#raft_node.state = "candidate"
 
 @api.route("/requestVote", methods = ["GET", "POST"])
 def request_votes():
@@ -32,11 +32,11 @@ def request_votes():
 		"voteGranted": True
 		}
 		return data
-	data = (raft_node.request_vote())
-	print(data, file=sys.stderr)
+	#data = (raft_node.request_vote())
+	#print(data, file=sys.stderr)
 	#voting_data = data[0]
-	response = data[1]
-	return jsonify(response)
+	#response = data[1]
+	return 200
 	
 @api.route("/apiendEntries", methods = ["POST", "GET"])
 def apiendEntries():
@@ -45,12 +45,13 @@ def apiendEntries():
 		"term": raft_node.current_term,
 		"success": True
 		}
+		raft_node.reset_timeout()
 		return data
-	data = raft_node.send_heartbeats()
-	print(data, file=sys.stderr)
+	#data = raft_node.send_heartbeats()
+	#print(data, file=sys.stderr)
 	#entry = data[0]
-	response = data[1]
-	return jsonify(response)
+	#response = data[1]
+	return 200
 
 async def main():
 	# Define the nodes
