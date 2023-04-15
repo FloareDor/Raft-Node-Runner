@@ -28,7 +28,7 @@ class RaftNode:
 		self.match_index = {node_id: 0 for node_id in self.nodes}
 		self.state = "follower"
 		self.leader_id = None
-		self.timeout = random.randint(5,10)
+		self.timeout = random.randint(5,15)
 		self.votesGranted = 0
 		self.votesReceived = 0
 		self.ip = self.nodes[node_id]["ip"]
@@ -42,6 +42,12 @@ class RaftNode:
 		self.app.logger.info(self.timeout)
 		while True:
 			if self.state == "follower":
+				# if self.node_id=="node2":
+				# 	self.timeout=11
+				# elif self.node_id=="node3":
+				# 	self.timeout=13
+				# else:
+				# 	self.timeout=7
 				await self.follower()
 			elif self.state == "candidate":
 				await self.candidate()
@@ -52,8 +58,8 @@ class RaftNode:
 
 
 	async def follower(self):
-		#self.reset_timeout()
-		self.timeout = 7
+		self.reset_timeout()
+		#self.timeout = 7
 		await asyncio.sleep(self.timeout)
 		print(self.timeout, file=sys.stdout)
 		while True:
@@ -120,7 +126,7 @@ class RaftNode:
 				
 
 	def reset_timeout(self):
-		self.timeout = random.randint(5,10)
+		self.timeout = random.randint(5,15)
 
 	# async def appendEntries(self):
 	# 	last_index = len(self.log) - 1
@@ -165,7 +171,7 @@ class RaftNode:
 				# response = ""
 				# async with aiohttp.ClientSession() as session:
 				# 	async with session.post(url, data=post_data) as response:
-				response = requests.post(url, json=post_data)
+				response = requests.post(url, json=post_data, timeout=15)
 				print(response.text, file=sys.stderr)
 
 				# async with aiohttp.ClientSession() as session:

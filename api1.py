@@ -31,6 +31,7 @@ raft_node = RaftNode(node_id, nodes)
 def request_vote():
 	try:
 		if request.method == "POST":
+			raft_node.reset_timeout()
 			data= {
 			"term": raft_node.current_term,
 			"voteGranted": True
@@ -61,7 +62,7 @@ def appendEntries():
 		}
 		print(f"Received HeartBeat {data}")
 		raft_node.reset_timeout()
-		raft_node.timeout = 7
+		#raft_node.timeout = 7
 		print(f"raft_node.timeout: {raft_node.timeout}")
 		return jsonify(data)
 	#data = raft_node.send_heartbeats()
