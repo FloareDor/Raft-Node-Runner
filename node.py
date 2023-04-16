@@ -7,6 +7,8 @@ from flask import Flask, request, jsonify
 import sys
 import multiprocessing
 import aiohttp
+import tracemalloc
+tracemalloc.start()
 
 app = Flask(__name__)
 app.app_context().push()
@@ -117,12 +119,13 @@ class RaftNode:
 
 	async def leader(self):
 		self.current_term += 1
-		print("SLEEEEEEEEEEEEEEPINGGGGGGGG", file=sys.stderr)
+		print("OUR LEADER IS HERE", file=sys.stderr)
 		#await asyncio.sleep(10)
 		self.reset_timeout()
 		while True:
 			await asyncio.sleep(3)
 			await self.send_heartbeats()
+			#await self.appendEntries()
 				
 
 	def reset_timeout(self):
@@ -213,14 +216,14 @@ class RaftNode:
 
 						post_data = {
 							"term": self.current_term,
-							"leaderId": self.leader_id,
-							"prevLogIndex": last_index,
-							"prevLogTerm": last_term,
+							"leaderId": node_id,
+							"prevLogIndex": None,
+							"prevLogTerm": None,
 							"entries": [{
-								"term": self.current_term,
-								"command": "command"
+								"term": None,
+								"command": None
 							}],
-							"leaderCommit": self.last_applied
+							"leaderCommit": None
 						}
 
 						async with session.post(url, json=post_data) as response:
@@ -238,6 +241,62 @@ class RaftNode:
 			print(f"HEART HEART: {e}", file=sys.stderr)
 
 		return data
+	
+
+	async def appendEntries(self, entries):
+		try:
+			acks = 0
+			# entries = [{
+			# 	"term": self.current_term,
+			# 	"command": "SET JAKE"
+			# }]
+			entries[0]["term"] = self.current_term
+			async with aiohttp.ClientSession() as session:
+				
+				for node_id in self.nodes:
+					if node_id != self.node_id:
+						url = f"http://{self.nodes[node_id]['ip']}:{self.nodes[node_id]['port']}/appendEntries"
+						last_index = len(self.log) - 1
+						last_term = self.log[last_index]['term'] if self.log else 0
+						post_data = {
+							"term": self.current_term,
+							"leaderId": self.node_id,
+							"prevLogIndex": last_index,
+							"prevLogTerm": last_term,
+							"entries": entries,
+							"leaderCommit": self.last_applied
+						}
+						async with session.post(url, json=post_data) as response:
+							print(f"Sent Log Data: {post_data}", file=sys.stderr)
+							
+							# Update the follower's term if it's behind
+							if response.status == 200:
+								response_data = await response.json()
+								print(77777777777777777)
+								print(response_data, file=sys.stderr)
+								print(77777777777777777)
+								if response_data["ack"]:
+									acks+=1
+								#print(f"Received Heartbeat {response_data}")
+								# if response_data['term'] > self.current_term:
+								# 	self.current_term = response_data['term']
+								# 	self.state = 'follower'
+				self.log.append(entries)
+				if acks >= len(self.nodes) // 2:
+					async with aiohttp.ClientSession() as session:
+						for node_id in self.nodes:
+							# if node_id != self.node_id:
+							url = f"http://{self.nodes[node_id]['ip']}:{self.nodes[node_id]['port']}/handleLog"
+							async with session.post(url, json={"code":"commit log"}) as response:
+								if response.status == 200:
+									pass
+								else:
+									print("error with saving data")	
+				else:
+					self.log.pop(len(self.log)-1)
+		except Exception as e:
+			print(f"LOG ERROR: {e}", file=sys.stderr)	
+					
 
 
 async def main():

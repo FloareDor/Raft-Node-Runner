@@ -3,6 +3,7 @@ from node import RaftNode
 import asyncio
 import sys
 import threading
+import json
 
 api = Flask(__name__)
 
@@ -37,7 +38,7 @@ def request_vote():
 			"voteGranted": True
 			}
 			term = request.get_json().get('term')
-			if term < raft_node.current_term:
+			if term < raft_node.current_term or raft_node.state == "candidate":
 			# self.current_term = response_data['term']
 			# self.state = 'follower'
 				data["voteGranted"] = False
@@ -54,22 +55,72 @@ def request_vote():
 	
 @api.route("/appendEntries", methods = ["POST", "GET"])
 def appendEntries():
-	if request.method == "POST":
-		
+	entries = request.get_json().get('entries')
+	term_flag = entries[0]["term"]
+	if request.method == "POST" and term_flag is None:
 		data = {
 		"term": raft_node.current_term,
 		"success": True
 		}
+		term = request.get_json().get('term')
+		if term < raft_node.current_term:
+			data["success"] = False
 		print(f"Received HeartBeat {data}")
 		raft_node.reset_timeout()
 		#raft_node.timeout = 7
 		print(f"raft_node.timeout: {raft_node.timeout}")
 		return jsonify(data)
+	
+	if term_flag is not None:
+		data = request.get_json()
+		response = {
+		"term": raft_node.current_term,
+		"ack": True
+		}
+		raft_node.log.append(data["entries"])
+		return (response, 200)
 	#data = raft_node.send_heartbeats()
 	#print(data, file=sys.stderr)
 	#entry = data[0]
 	#response = data[1]
 	return make_response("Success", 200)
+
+@api.route("/handleLog", methods = ["POST", "GET"])
+def handleLog():
+	data = request.get_json()
+	if data["code"] == "commit log":
+		save = raft_node.log[len(raft_node.log)-1]
+		json_data = json.dumps(save)
+		# with open(f"{node_id}.json", "w") as f:
+		# 	f.write(json_data)
+		# f.close()
+		existing_data = []
+		try:
+			with open(f"{node_id}.json", "r") as f:
+				existing_data = json.load(f)
+		except:
+			pass
+		existing_data.append(json_data)
+		with open(f"{node_id}.json", "w") as f:
+			json.dump(existing_data, f)
+
+	return (f"Data saved {save}", 200)
+
+@api.route("/client-comms", methods=["POST", "GET"])
+def addComm():
+	try:
+		data = [request.get_json()]
+		print(data)
+		asyncio.run(raft_node.appendEntries(data))
+	except Exception as e:
+		print(f"COMMS ERROR: {e}")
+	return {"code": "200"}
+
+@api.route("/send_remaining_data", methods=["POST", "GET"])
+def send_remaining_data():
+	data = request.get_json()
+	broken_node_id = data["node_id"]
+	return {"code": "200"}
 
 async def main():
 	# Define the nodes
