@@ -74,7 +74,6 @@ class RaftNode:
 
 	async def candidate(self):
 		try:
-			
 			self.voted_for = self.node_id
 			self.reset_timeout()
 			self.votesReceived = 1
@@ -245,7 +244,7 @@ class RaftNode:
 
 	async def appendEntries(self, entries):
 		try:
-			acks = 0
+			successes = 0
 			# entries = [{
 			# 	"term": self.current_term,
 			# 	"command": "SET JAKE"
@@ -275,14 +274,14 @@ class RaftNode:
 								print(77777777777777777)
 								print(response_data, file=sys.stderr)
 								print(77777777777777777)
-								if response_data["ack"]:
-									acks+=1
+								if response_data["success"]:
+									successes+=1
 								#print(f"Received Heartbeat {response_data}")
 								# if response_data['term'] > self.current_term:
 								# 	self.current_term = response_data['term']
 								# 	self.state = 'follower'
 				self.log.append(entries)
-				if acks >= len(self.nodes) // 2:
+				if successes >= len(self.nodes) // 2:
 					async with aiohttp.ClientSession() as session:
 						for node_id in self.nodes:
 							# if node_id != self.node_id:
@@ -292,8 +291,6 @@ class RaftNode:
 									pass
 								else:
 									print("error with saving data")	
-				else:
-					self.log.pop(len(self.log)-1)
 		except Exception as e:
 			print(f"LOG ERROR: {e}", file=sys.stderr)	
 					

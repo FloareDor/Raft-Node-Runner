@@ -23,7 +23,7 @@ nodes = {
 
 # # Run the nodes' event loops
 # await asyncio.gather(*tasks)
-node_id = "1"
+node_id = "3"
 #api.run(nodes[node_id]["ip"], port=nodes[node_id]["port"])
 raft_node = RaftNode(node_id, nodes)
 #raft_node.state = "candidate"
