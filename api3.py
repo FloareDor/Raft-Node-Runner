@@ -8,10 +8,11 @@ import json
 api = Flask(__name__)
 
 nodes = {
-	"1": {"ip": "127.0.0.1", "port": 8000},
-	"2": {"ip": "127.0.0.1", "port": 8001},
-	"3": {"ip": "127.0.0.1", "port": 8002}
-	
+	"node1": {"ip": "127.0.0.1", "port": 8000},
+	"node2": {"ip": "127.0.0.1", "port": 8001},
+	"node3": {"ip": "127.0.0.1", "port": 8002},
+	"node4": {"ip": "127.0.0.1", "port": 8003},
+	"node5": {"ip": "127.0.0.1", "port": 8004},
 }
 
 
@@ -23,7 +24,7 @@ nodes = {
 
 # # Run the nodes' event loops
 # await asyncio.gather(*tasks)
-node_id = "3"
+node_id = "node3"
 #api.run(nodes[node_id]["ip"], port=nodes[node_id]["port"])
 raft_node = RaftNode(node_id, nodes)
 #raft_node.state = "candidate"
@@ -62,7 +63,9 @@ def appendEntries():
 		"term": raft_node.current_term,
 		"success": True
 		}
-
+		term = request.get_json().get('term')
+		if term < raft_node.current_term:
+			data["success"] = False
 		print(f"Received HeartBeat {data}")
 		raft_node.reset_timeout()
 		#raft_node.timeout = 7
@@ -73,11 +76,8 @@ def appendEntries():
 		data = request.get_json()
 		response = {
 		"term": raft_node.current_term,
-		"success": True
+		"ack": True
 		}
-		term = request.get_json().get('term')
-		if term < raft_node.current_term:
-			data["success"] = False
 		raft_node.log.append(data["entries"])
 		return (response, 200)
 	#data = raft_node.send_heartbeats()
