@@ -1,5 +1,5 @@
 # Raft Node Consensus Protocol
-###Description
+### Description
 
 This project is an implementation of the Raft consensus algorithm. Raft is a consensus protocol designed for managing a replicated log and achieving consensus across a cluster of nodes in a distributed system. The protocol ensures that all nodes agree on the same sequence of log entries, even in the presence of failures.
 
